@@ -31,3 +31,8 @@ Revision history for Perl extension Apache::AuthNetLDAP.
 
 0.26  Thu Sep 25 06:33:30 2003
 	- Added the ability to use alternate methods of authentication (ie basic, etc)	
+
+0.27  Mon Mar 29 2004
+	- Added LDAPFilter, SearchScope and TLS connections to module (Thanks to Nick Urbanik!)
+	- Added documentation for LDAPFilter, SearchScope and TLS connections to module 
+	  (Also, thanks to Nick Urbanik)

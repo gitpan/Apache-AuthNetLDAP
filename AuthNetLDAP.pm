@@ -15,7 +15,7 @@ require Exporter;
 @EXPORT = qw(
 	
 );
-$VERSION = '0.26';
+$VERSION = '0.27';
 
 # setting the constants to help identify which version of mod_perl
 # is installed
@@ -57,6 +57,9 @@ sub handler
    my $ldapport = $r->dir_config('LDAPPort') || 389;
    my $uidattr = $r->dir_config('UIDAttr') || "uid";
    my $allowaltauth = $r->dir_config('AllowAlternateAuth') || "no"; 
+   my $ldapfilter = $r->dir_config('LDAPFilter') || "";
+   my $start_TLS = $r->dir_config('UseStartTLS') || "no";
+   my $scope = $r->dir_config('SearchScope') || 'sub';
   
    if ($password eq "") {
         $r->note_basic_auth_failure;
@@ -66,6 +69,12 @@ sub handler
  
   
    my $ldap = new Net::LDAP($ldapserver, port => $ldapport);
+   if (lc $start_TLS eq 'yes')
+   {
+       $ldap->start_tls(verify => 'none')
+           or MP2 ? $r->log_error( "Unable to start_tls", $r->uri)
+                  : $r->log_reason("Unable to start_tls", $r->uri);
+   }
 
    my $mesg;
    #initial bind as user in Apache config
@@ -89,10 +98,13 @@ sub handler
   #Look for user based on UIDAttr
   
    my $attrs = ['dn'];
+   my $filter = $ldapfilter
+       ? "(&$ldapfilter($uidattr=$user))"
+       : "($uidattr=$user)";
   $mesg = $ldap->search(
                   base => $basedn,
-                  scope => 'sub',                  
-                  filter => "($uidattr=$user)",
+                  scope => $scope,                  
+                  filter => $filter,
                   attrs => $attrs
                  );
 
@@ -156,9 +168,15 @@ Apache::AuthNetLDAP - mod_perl module that uses the Net::LDAP module for user au
  PerlSetVar LDAPPort 389
  #PerlSetVar UIDAttr uid
  PerlSetVar UIDAttr mail
+ #PerlSetVar SearchScope base | one | sub # default is sub
+ #PerlSetVar LDAPFilter "(&(course=CSA)(class=A))" #optional
+
+ # Set if you want to encrypt communication with LDAP server
+ # and avoid sending clear text passwords over the network
+ PerlSetVar UseStartTLS yes | no
  
  # Set if you want to allow an alternate method of authentication
- PerlSetVar AllowAlternateAuth yes || no
+ PerlSetVar AllowAlternateAuth yes | no
 
  require valid-user
 
@@ -168,7 +186,7 @@ Apache::AuthNetLDAP - mod_perl module that uses the Net::LDAP module for user au
 
 This module authenticates users via LDAP using the Net::LDAP module. This module is Graham Barr's "pure" Perl LDAP API. 
 
-It also uses all of the same parameters as the Apache::AuthPerLDAP, but I have added two extra parameters. 
+It also uses all of the same parameters as the Apache::AuthPerLDAP, but I have added four extra parameters. 
 
 The parameters are:
 
@@ -202,15 +220,53 @@ The attribute used to lookup the user.
 
 This attribute allows you to set an alternative method of authentication
 (Basically, this allows you to mix authentication methods, if you don't have
- all users in the LDAP database). It does this by returning a DECLINED and checking 
+ all users in the LDAP database). It does this by returning a DECLINE and checking 
  for the next handler, which could be another authentication, such as 
 Apache-AuthenNTLM or basic authentication.
+
+=item PerlSetVar SearchScope
+
+Optional.  Can be base, one or sub.  Default is sub.  Determines the
+scope of the LDAP search.
+
+=item PerlSetVar LDAPFilter
+
+This is an LDAP filter, as defined in RFC 2254.  This is optional.  If
+provided, it will be ANDed with the filter that verifies the UID.  For
+example, if you have these set:
+
+ PerlSetVar UIDAttr uid
+ PerlSetVar LDAPFilter "(&(course=41300)(year=3)(classCode=Y))"
+
+and a user authenticates with the username "nicku" then the following
+filter will be generated to search for the entry to authenticate against:
+
+ (&(&(course=41300)(year=3)(classCode=Y))(uid=nicku))
+
+This will then allow nicku access only if nicku's LDAP entry has the
+attribute course equal to 41300, the attribute year equal to 3, and
+attribute classCode equal to Y.  And of course, if the password is
+correct.  This may be useful for restricting access to a group of
+users in a large directory, e.g., at a university.
+
+=item PerlSetVar UseStartTLS
+
+Optional; can be yes or no.  If yes, will fail unless can start a TLS
+encrypted connection to the LDAP server before sending passwords over
+the network.  Note that this requires that the optional module
+IO::Socket::SSL is installed; this depends on Net::SSLeay, which
+depends on openssl.  Of course, the LDAP server must support Start TLS
+also.
 
 =back
 
 =head2 Uses for UIDAttr
 
-For example if you set the UIDAttr to uid, then the LDAP search filter will lookup a user using the search filter:
+For example if you set the UIDAttr to uid, and a user enters the UID
+nicku, then the LDAP search filter will lookup a user using the search
+filter:
+
+ (uid=nicku)
 
 Normally you will use the uid attribute, but you may want (need) to use a different attribute depending on your LDAP server or to synchronize with different applications. For example some versions of Novell's LDAP servers that I've encountered stored the user's login name in the cn attribute (a really bad idea). And the Netscape Address Book uses a user's email address as the login id.
 
@@ -220,10 +276,10 @@ It's a pretty straightforward install if you already have mod_perl and Net::LDAP
 
 After you have unpacked the distribution type:
 
-perl Makefile.PL
-make
-make test 
-make install
+ perl Makefile.PL
+ make
+ make test 
+ make install
 
 Then in your httpd.conf file or .htaccess file, in either a <Directory> or <Location> section put:
 
@@ -236,49 +292,62 @@ Then in your httpd.conf file or .htaccess file, in either a <Directory> or <Loca
  PerlSetVar BaseDN "ou=people,o=acme.com"
  PerlSetVar LDAPServer ldap.acme.com
  PerlSetVar LDAPPort 389
- PerlSetVar UIDAttr uid 
+ PerlSetVar UIDAttr uid
+ PerlSetVar UseStartTLS yes # Assuming you installed IO::Socket::SSL, etc.
+ 
+ # Set if you want base or one level scope for search:
+ PerlSetVar SearchScope one # default is sub
+
+ # Set if you want to limit access to a subset of users:
+ #PerlSetVar LDAPFilter "(&(course=CSA)(class=A))" #optional
 
  # Set if you want to allow an alternate method of authentication
- PerlSetVar AllowAlternateAuth yes || no
+ PerlSetVar AllowAlternateAuth yes | no
 
  require valid-user
 
  PerlAuthenHandler Apache::AuthNetLDAP
 
- If you don't have mod_perl or Net::LDAP installed on your system, then the Makefile will prompt you to 
- install each of these modules. At this time, June 6, 2003, you may say yes to Net::LDAP, and yes for 
- mod_perl, if you are installing this module on apache 1.3.  (The reason being, that mod_perl 2 is under 
- development, and is not ready for download from CPAN at this time.  Therefore, your install of mod_perl,
- as initiated with the Makefile.PL, will fail. If you are going to install mod_perl 2, which is needed
- to work with Apache2, you will need to download it from:  http://perl.apache.org/download/index.html. 
- (Installation is beyond the scope of this document, but you can find documentation at:  
- http://perl.apache.org/docs/2.0/user/install/install.html#Installing_mod_perl_from_Source.)  
- Otherwise installation is the same.   
+If you don't have mod_perl or Net::LDAP installed on your system, then the Makefile will prompt you to 
+install each of these modules. At this time, March 8, 2004, you may say yes to Net::LDAP, and yes for 
+mod_perl, if you are installing this module on apache 1.3.  (The reason being, that mod_perl 2 is under 
+development, and is not ready for download from CPAN at this time.  Therefore, your install of mod_perl,
+as initiated with the Makefile.PL, will fail. If you are going to install mod_perl 2, which is needed
+to work with Apache2, you will need to download it from:  http://perl.apache.org/download/index.html. 
+(Installation is beyond the scope of this document, but you can find documentation at:  
+http://perl.apache.org/docs/2.0/user/install/install.html#Installing_mod_perl_from_Source.)  
+Otherwise installation is the same.   
 
- You may also notice that the Makefile.PL will ask you to install ExtUtils::AutoInstall.  This is 
- necessary for the installation process to automatically install any of the dependencies that you
- are prompted for. You may choose to install the module, or not.
+You may also notice that the Makefile.PL will ask you to install ExtUtils::AutoInstall.  This is 
+necessary for the installation process to automatically install any of the dependencies that you
+are prompted for. You may choose to install the module, or not.
 
 =head1 HOMEPAGE
 
-	Module Home: http://search.cpan.org/author/SPEEVES/ 
+Module Home: http://search.cpan.org/author/SPEEVES/ 
 
 =head1 AUTHOR
-   	Mark Wilcox mewilcox@unt.edu and
-	Shannon Eric Peevey speeves@unt.edu
+
+ Mark Wilcox mewilcox@unt.edu and
+ Shannon Eric Peevey speeves@unt.edu
 
 =head1 SEE ALSO
-   L<Net::LDAP>
-  
+
+L<Net::LDAP>
 
 =head1 ACKNOWLEDGMENTS
 
- Graham Barr for writing Net::LDAP module.
- Henrik Strom for writing the Apache::AuthPerLDAP module which I derived this from.
- The O'Reilly "Programming Modules for Apache with Perl and C" (http://www.modperl.com).
- Mark Wilcox for being the "Godfather" of Central Web Support... ;)
- Stas Beckman for having the patience to answer my many questions.
- Everyone else on the modperl mailing list...  You know who you are :)
+Graham Barr for writing Net::LDAP module.
+
+Henrik Strom for writing the Apache::AuthPerLDAP module which I derived this from.
+
+The O'Reilly "Programming Modules for Apache with Perl and C" (http://www.modperl.com).
+
+Mark Wilcox for being the "Godfather" of Central Web Support... ;)
+
+Stas Beckman for having the patience to answer my many questions.
+
+Everyone else on the modperl mailing list...  You know who you are :)
 
 
 =head1 WARRANTY AND LICENSE
