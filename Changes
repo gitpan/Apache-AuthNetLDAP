@@ -7,3 +7,14 @@ Revision history for Perl extension Apache::AuthNetLDAP.
 	- Makefile.PL updated to prompt for automatic downloading of module dependencies.
 	- using ExtUtils::AutoInstall Makefile now prompts for prereqs Net::LDAP and mod_perl
 	- AuthNetLDAP.pm modified to work with both mod_perl 1 and mod_perl-1.99 or greater
+
+0.21  Tue Jun 11 06:33:30 2003
+	- Move $VERSION number variable above the BEGIN block so that PAUSE will 
+	  recognize the $VERSION number of the module
+
+0.22  Wed Jun 12 06:33:30 2003
+	- Try to fix the "extended" text in the documentation of module
+
+0.23  Wed Jun 12 06:33:30 2003
+	- Fix the chmod on the files so that the installation will be able to manipulate
+	  the files.  
