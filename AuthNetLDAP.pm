@@ -15,7 +15,7 @@ require Exporter;
 @EXPORT = qw(
 	
 );
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 # setting the constants to help identify which version of mod_perl
 # is installed
