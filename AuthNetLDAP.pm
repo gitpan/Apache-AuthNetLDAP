@@ -5,18 +5,38 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
 require Exporter;
 
-use Apache::Constants qw(:common);
 use Net::LDAP;
+use mod_perl;
 
+# setting the constants to help identify which version of mod_perl
+# is installed
+use constant MP2 => ($mod_perl::VERSION >= 1.99);
+
+# test for the version of mod_perl, and use the appropriate libraries
+BEGIN {
+	if (MP2) {
+		require Apache::Const;
+		require Apache::Access;
+		require Apache::Connection;
+		require Apache::Log;
+		require Apache::RequestRec;
+		require Apache::RequestUtil;
+		Apache::Const->import(-compile => 'HTTP_UNAUTHORIZED','OK');
+	} else {
+		require Apache::Constants;
+		Apache::Constants->import('HTTP_UNAUTHORIZED','OK');
+	}
+}
 @ISA = qw(Exporter AutoLoader);
+
 # Items to export into callers namespace by default. Note: do not export
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
 @EXPORT = qw(
 	
 );
-$VERSION = '0.19';
 
+$VERSION = '0.20';
 
 # Preloaded methods go here.
 
@@ -26,9 +46,10 @@ sub handler
    my $r = shift; 
 
    my ($result, $password) = $r->get_basic_auth_pw;
-   return $result if $result; 
-  
-   my $username = $r->connection->user;
+    return $result if $result; 
+ 
+   # change based on version of mod_perl 
+   my $user = MP2 ? $r->user : $r->connection->user;
 
    my $binddn = $r->dir_config('BindDN') || "";
    my $bindpwd = $r->dir_config('BindPWD') || "";
@@ -39,8 +60,8 @@ sub handler
  
     if ($password eq "") {
         $r->note_basic_auth_failure;
-        $r->log_reason("user $username: no password supplied",$r->uri);
-        return AUTH_REQUIRED;
+	MP2 ? $r->log_error("user $user: no password supplied",$r->uri) : $r->log_reason("user $user: no password supplied",$r->uri); 
+        return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
     }
  
   
@@ -61,8 +82,8 @@ sub handler
    if (my $error = $mesg->code())
    {
         $r->note_basic_auth_failure;
-        $r->log_reason("user $username: LDAP Connection Failed: $error",$r->uri);
-        return AUTH_REQUIRED; 
+        MP2 ? $r->log_error("user $user: LDAP Connection Failed: $error",$r->uri) : $r->log_reason("user $user: LDAP Connection Failed: $error",$r->uri);
+        return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
    }
   
   
@@ -72,22 +93,22 @@ sub handler
   $mesg = $ldap->search(
                   base => $basedn,
                   scope => 'sub',                  
-                  filter => "($uidattr=$username)",
+                  filter => "($uidattr=$user)",
                   attrs => $attrs
                  );
 
     if (my $error = $mesg->code())
    {
         $r->note_basic_auth_failure;
-        $r->log_reason("user $username: LDAP Connection Failed: $error",$r->uri);
-        return AUTH_REQUIRED;
+        MP2 ? $r->log_error("user $user: LDAP Connection Failed: $error",$r->uri) : $r->log_reason("user $user: LDAP Connection Failed: $error",$r->uri);
+        return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
    }
 
    unless ($mesg->count())
    {
         $r->note_basic_auth_failure;
-        $r->log_reason("user $username: user entry not found for filter: $uidattr=$username",$r->uri);
-        return AUTH_REQUIRED;
+	MP2 ? $r->log_error("user $user: user entry not found for filter: $uidattr=$user",$r->uri) : $r->log_reason("user $user: user entry not found for filter: $uidattr=$user",$r->uri); 
+        return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
    }
  
    #now try to authenticate as user
@@ -98,14 +119,14 @@ sub handler
   if (my $error = $mesg->code())
   {
         $r->note_basic_auth_failure;
-        $r->log_reason("user $username: failed bind: $error",$r->uri);
-        return AUTH_REQUIRED;
+        MP2 ? $r->log_error("user $user: failed bind: $error",$r->uri) : $r->log_reason("user $user: failed bind: $error",$r->uri);
+        return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
    }
         my $error = $mesg->code();
         my $dn = $entry->dn();
-        #$r->log_reason("AUTHDEBUG user $dn:$password bind: $error",$r->uri);
+        # MP2 ? $r->log_error("AUTHDEBUG user $dn:$password bind: $error",$r->uri) : $r->log_reason("AUTHDEBUG user $dn:$password bind: $error",$r->uri);
 
- return OK;
+ 	return MP2 ? Apache::OK : Apache::Constants::OK;
 }
 # Autoload methods go after =cut, and are processed by the autosplit program.
 
@@ -182,7 +203,8 @@ It's a pretty straightforward install if you already have mod_perl and Net::LDAP
 After you have unpacked the distribution type:
 
 perl Makefile.PL
-make 
+make
+make test 
 make install
 
 Then in your httpd.conf file or .htaccess file, in either a <Directory> or <Location> section put:
@@ -202,12 +224,17 @@ Then in your httpd.conf file or .htaccess file, in either a <Directory> or <Loca
 
  PerlAuthenHandler Apache::AuthNetLDAP
 
+ If you don't have mod_perl or Net::LDAP installed on your system, then the Makefile will prompt you to install each of these modules. At this time, June 6, 2003, you may say yes to Net::LDAP, and yes for mod_perl, if you are installing this module on apache 1.3.  (The reason being, that mod_perl 2 is under development, and is not ready for download from CPAN at this time.  Therefore, your install of mod_perl, as initiated with the Makefile.PL, will fail. If you are going to install mod_perl 2, which is needed to work with Apache2, you will need to download it from:  http://perl.apache.org/download/index.html.  (Installation is beyond the scope of this document, but you can find documentation at:  http://perl.apache.org/docs/2.0/user/install/install.html#Installing_mod_perl_from_Source.)  Otherwise installation is the same.   
+
+ You may also notice that the Makefile.PL will ask you to install ExtUtils::AutoInstall.  This is necessary for the installation process to automatically install any of the dependencies that you are prompted for. You may choose to install the module, or not.
+
 =head1 HOMEPAGE
 
-	Module Home:http://courses.unt.edu/mewilcox/
+	Module Home: http://web2.unt.edu/apache_authnetldap/Apache_AuthNetLDAP-0.20.tar.gz
 
 =head1 AUTHOR
    	Mark Wilcox mewilcox@unt.edu
+	Shannon Eric Peevey speeves@unt.edu
 
 =head1 SEE ALSO
    L<Net::LDAP>
@@ -218,8 +245,13 @@ Then in your httpd.conf file or .htaccess file, in either a <Directory> or <Loca
  Graham Barr for writing Net::LDAP module.
  Henrik Strom for writing the Apache::AuthPerLDAP module which I derived this from.
  The O'Reilly "Programming Modules for Apache with Perl and C" (http://www.modperl.com).
+ Mark Wilcox for being the "Godfather" of Central Web Support... ;)
+ Stas Beckman for having the patience to answer my many questions.
+ Everyone else on the modperl mailing list...  You know who you are :)
+
 
 =head1 WARRANTY AND LICENSE
+
 You can distribute and modify in accordance to the same license as Perl. Though I would like to know how you are using the module or if you are using the module at all.
 
 Like most of the stuff on the 'net, I got this copy to work for me without destroying mankind, you're mileage may vary.
