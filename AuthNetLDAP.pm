@@ -15,7 +15,7 @@ require Exporter;
 @EXPORT = qw(
 	
 );
-$VERSION = '0.27';
+$VERSION = '0.28';
 
 # setting the constants to help identify which version of mod_perl
 # is installed
@@ -60,7 +60,14 @@ sub handler
    my $ldapfilter = $r->dir_config('LDAPFilter') || "";
    my $start_TLS = $r->dir_config('UseStartTLS') || "no";
    my $scope = $r->dir_config('SearchScope') || 'sub';
-  
+   my $domain = "";
+
+   # remove the domainname if logging in from winxp
+   ## Parse $name's with Domain\Username 
+   if ($user =~ m|(\w+)[\\/](.+)|) {
+       ($domain,$user) = ($1,$2);
+   }
+   
    if ($password eq "") {
         $r->note_basic_auth_failure;
 	MP2 ? $r->log_error("user $user: no password supplied",$r->uri) : $r->log_reason("user $user: no password supplied",$r->uri); 
