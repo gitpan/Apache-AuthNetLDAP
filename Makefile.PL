@@ -30,17 +30,12 @@
 	    force	=> 1,		# pseudo-option to force install
 	    do_once	=> 1,		# skip previously failed modules
 	},
-	-core		=> 'all', 		# core modules; may also be 'all'
+	-core		=> [
+		Convert::ASN1 => '',
+		Net::LDAP => '',
+	], 		# core modules; may also be 'all'
         'Feature1'	=> [
 	    # do we want to install this feature by default?
-	    -default	=> ( system('feature1 --version') == 0 ),
-	    Net::LDAP	=> '',
-	],
-        'Feature2'	=> [
-	    # do we want to install this feature by default?
-	    # Make sure to answer no if you want mod_perl 2
-	    # (Will be able to answer yes, once it is out of 
-	    # development.)
 	    -default	=> ( system('feature1 --version') == 0 ),
 	    mod_perl	=> '',
 	],
@@ -48,7 +43,7 @@
 
     WriteMakefile(
 	AUTHOR          => 'Mark Wilcox (mjwilcox@wilcox.com) and Shannon Eric Peevey (speeves@unt.edu)',
-	ABSTRACT        => 'Apache::AuthNetLDAP 0.20 -- Perl module which authenticates users via LDAP using the Net::LDAP module.',
+	ABSTRACT        => 'Apache::AuthNetLDAP -- Perl module which authenticates users via LDAP using the Net::LDAP module.',
 	NAME            => 'Apache::AuthNetLDAP',
 	VERSION_FROM    => 'AuthNetLDAP.pm',
 	DISTNAME        => 'Apache-AuthNetLDAP',

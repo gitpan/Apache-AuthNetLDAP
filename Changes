@@ -18,3 +18,7 @@ Revision history for Perl extension Apache::AuthNetLDAP.
 0.23  Wed Jun 12 06:33:30 2003
 	- Fix the chmod on the files so that the installation will be able to manipulate
 	  the files.  
+
+0.24  Sat Jun 21 06:33:30 2003	
+	- Fix the Makefile.PL, to make sure that the module can not be made 
+	  without Net::LDAP
