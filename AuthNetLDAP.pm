@@ -15,7 +15,7 @@ require Exporter;
 @EXPORT = qw(
 	
 );
-$VERSION = '0.21';
+$VERSION = '0.22';
 
 # setting the constants to help identify which version of mod_perl
 # is installed
@@ -223,16 +223,26 @@ Then in your httpd.conf file or .htaccess file, in either a <Directory> or <Loca
 
  PerlAuthenHandler Apache::AuthNetLDAP
 
- If you don't have mod_perl or Net::LDAP installed on your system, then the Makefile will prompt you to install each of these modules. At this time, June 6, 2003, you may say yes to Net::LDAP, and yes for mod_perl, if you are installing this module on apache 1.3.  (The reason being, that mod_perl 2 is under development, and is not ready for download from CPAN at this time.  Therefore, your install of mod_perl, as initiated with the Makefile.PL, will fail. If you are going to install mod_perl 2, which is needed to work with Apache2, you will need to download it from:  http://perl.apache.org/download/index.html.  (Installation is beyond the scope of this document, but you can find documentation at:  http://perl.apache.org/docs/2.0/user/install/install.html#Installing_mod_perl_from_Source.)  Otherwise installation is the same.   
+ If you don't have mod_perl or Net::LDAP installed on your system, then the Makefile will prompt you to 
+ install each of these modules. At this time, June 6, 2003, you may say yes to Net::LDAP, and yes for 
+ mod_perl, if you are installing this module on apache 1.3.  (The reason being, that mod_perl 2 is under 
+ development, and is not ready for download from CPAN at this time.  Therefore, your install of mod_perl,
+ as initiated with the Makefile.PL, will fail. If you are going to install mod_perl 2, which is needed
+ to work with Apache2, you will need to download it from:  http://perl.apache.org/download/index.html. 
+ (Installation is beyond the scope of this document, but you can find documentation at:  
+ http://perl.apache.org/docs/2.0/user/install/install.html#Installing_mod_perl_from_Source.)  
+ Otherwise installation is the same.   
 
- You may also notice that the Makefile.PL will ask you to install ExtUtils::AutoInstall.  This is necessary for the installation process to automatically install any of the dependencies that you are prompted for. You may choose to install the module, or not.
+ You may also notice that the Makefile.PL will ask you to install ExtUtils::AutoInstall.  This is 
+ necessary for the installation process to automatically install any of the dependencies that you
+ are prompted for. You may choose to install the module, or not.
 
 =head1 HOMEPAGE
 
-	Module Home: http://web2.unt.edu/apache_authnetldap/Apache_AuthNetLDAP-0.20.tar.gz
+	Module Home: http://web2.unt.edu/apache_authnetldap/
 
 =head1 AUTHOR
-   	Mark Wilcox mewilcox@unt.edu
+   	Mark Wilcox mewilcox@unt.edu and
 	Shannon Eric Peevey speeves@unt.edu
 
 =head1 SEE ALSO
