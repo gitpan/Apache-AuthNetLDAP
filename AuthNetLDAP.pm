@@ -15,7 +15,7 @@ require Exporter;
 @EXPORT = qw(
 	
 );
-$VERSION = '0.25';
+$VERSION = '0.26';
 
 # setting the constants to help identify which version of mod_perl
 # is installed
@@ -30,10 +30,10 @@ BEGIN {
 		require Apache::Log;
 		require Apache::RequestRec;
 		require Apache::RequestUtil;
-		Apache::Const->import(-compile => 'HTTP_UNAUTHORIZED','OK');
+		Apache::Const->import(-compile => 'HTTP_UNAUTHORIZED','OK','DECLINED');
 	} else {
 		require Apache::Constants;
-		Apache::Constants->import('HTTP_UNAUTHORIZED','OK');
+		Apache::Constants->import('HTTP_UNAUTHORIZED','OK','DECLINED');
 	}
 }
 
@@ -56,12 +56,13 @@ sub handler
    my $ldapserver = $r->dir_config('LDAPServer') || "localhost";
    my $ldapport = $r->dir_config('LDAPPort') || 389;
    my $uidattr = $r->dir_config('UIDAttr') || "uid";
- 
-    if ($password eq "") {
+   my $allowaltauth = $r->dir_config('AllowAlternateAuth') || "no"; 
+  
+   if ($password eq "") {
         $r->note_basic_auth_failure;
 	MP2 ? $r->log_error("user $user: no password supplied",$r->uri) : $r->log_reason("user $user: no password supplied",$r->uri); 
         return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
-    }
+   }
  
   
    my $ldap = new Net::LDAP($ldapserver, port => $ldapport);
@@ -82,7 +83,6 @@ sub handler
    {
         $r->note_basic_auth_failure;
         MP2 ? $r->log_error("user $user: LDAP Connection Failed: $error",$r->uri) : $r->log_reason("user $user: LDAP Connection Failed: $error",$r->uri);
-        return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
    }
   
   
@@ -107,7 +107,15 @@ sub handler
    {
         $r->note_basic_auth_failure;
 	MP2 ? $r->log_error("user $user: user entry not found for filter: $uidattr=$user",$r->uri) : $r->log_reason("user $user: user entry not found for filter: $uidattr=$user",$r->uri); 
-        return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
+	# If user is not found in ldap database, check for the next auth handler before failing 
+	if (lc($allowaltauth) eq "yes")
+	{
+           return MP2 ? Apache::DECLINED : Apache::Constants::DECLINED; 
+        }
+        else
+        {
+           return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
+        }
    }
  
    #now try to authenticate as user
@@ -148,6 +156,9 @@ Apache::AuthNetLDAP - mod_perl module that uses the Net::LDAP module for user au
  PerlSetVar LDAPPort 389
  #PerlSetVar UIDAttr uid
  PerlSetVar UIDAttr mail
+ 
+ # Set if you want to allow an alternate method of authentication
+ PerlSetVar AllowAlternateAuth yes || no
 
  require valid-user
 
@@ -187,6 +198,14 @@ This is the port the LDAP server is listening on.
 
 The attribute used to lookup the user.
 
+=item PerlSetVar AllowAlternateAuth
+
+This attribute allows you to set an alternative method of authentication
+(Basically, this allows you to mix authentication methods, if you don't have
+ all users in the LDAP database). It does this by returning a DECLINED and checking 
+ for the next handler, which could be another authentication, such as 
+Apache-AuthenNTLM or basic authentication.
+
 =back
 
 =head2 Uses for UIDAttr
@@ -219,6 +238,9 @@ Then in your httpd.conf file or .htaccess file, in either a <Directory> or <Loca
  PerlSetVar LDAPPort 389
  PerlSetVar UIDAttr uid 
 
+ # Set if you want to allow an alternate method of authentication
+ PerlSetVar AllowAlternateAuth yes || no
+
  require valid-user
 
  PerlAuthenHandler Apache::AuthNetLDAP
@@ -239,7 +261,7 @@ Then in your httpd.conf file or .htaccess file, in either a <Directory> or <Loca
 
 =head1 HOMEPAGE
 
-	Module Home: http://web2.unt.edu/apache_authnetldap/
+	Module Home: http://search.cpan.org/author/SPEEVES/ 
 
 =head1 AUTHOR
    	Mark Wilcox mewilcox@unt.edu and

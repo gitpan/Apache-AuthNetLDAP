@@ -28,3 +28,6 @@ Revision history for Perl extension Apache::AuthNetLDAP.
 	  without mod_perl
 	- Add an informational notice to the Makefile.PL to warn about 
 	  downloading mod_perl2 from CPAN 
+
+0.26  Thu Sep 25 06:33:30 2003
+	- Added the ability to use alternate methods of authentication (ie basic, etc)	
