@@ -15,7 +15,7 @@ require Exporter;
 @EXPORT = qw(
 	
 );
-$VERSION = '0.28';
+$VERSION = '0.29';
 
 # setting the constants to help identify which version of mod_perl
 # is installed
@@ -59,7 +59,8 @@ sub handler
    my $allowaltauth = $r->dir_config('AllowAlternateAuth') || "no"; 
    my $ldapfilter = $r->dir_config('LDAPFilter') || "";
    my $start_TLS = $r->dir_config('UseStartTLS') || "no";
-   my $scope = $r->dir_config('SearchScope') || 'sub';
+   my $scope = $r->dir_config('SearchScope') || "sub";
+   my $pwattr = $r->dir_config('AlternatePWAttribute') || "";
    my $domain = "";
 
    # remove the domainname if logging in from winxp
@@ -103,8 +104,16 @@ sub handler
   
   
   #Look for user based on UIDAttr
-  
-   my $attrs = ['dn'];
+   my $attrs = [];
+   if ($pwattr ne "")
+   {
+       $attrs = ['dn',$pwattr];
+   }
+   else
+   {
+       $attrs = ['dn'];
+   }
+
    my $filter = $ldapfilter
        ? "(&$ldapfilter($uidattr=$user))"
        : "($uidattr=$user)";
@@ -139,8 +148,33 @@ sub handler
  
    #now try to authenticate as user
    my $entry = $mesg->shift_entry;
-   $mesg = $ldap->bind($entry->dn(),password=>$password);
 
+   if ( $pwattr ne "" )
+   {
+       my $altfieldvalue = $entry->get_value ( $pwattr );
+       $altfieldvalue =~ s/^\s+//;
+       $altfieldvalue =~ s/\s+$//;
+       if ($altfieldvalue eq $password)
+       {
+	   return MP2 ? Apache::OK : Apache::Constants::OK;
+       }
+       else
+       {
+	# If user is not found in ldap database, check for the next auth handler before failing 
+	if (lc($allowaltauth) eq "yes")
+	{
+           return MP2 ? Apache::DECLINED : Apache::Constants::DECLINED; 
+        }
+        else
+        {
+           return MP2 ? Apache::HTTP_UNAUTHORIZED : Apache::Constants::HTTP_UNAUTHORIZED;
+        }
+       }
+   }
+   else
+   {
+       $mesg = $ldap->bind($entry->dn(),password=>$password);
+   }
  
   if (my $error = $mesg->code())
   {
@@ -175,6 +209,7 @@ Apache::AuthNetLDAP - mod_perl module that uses the Net::LDAP module for user au
  PerlSetVar LDAPPort 389
  #PerlSetVar UIDAttr uid
  PerlSetVar UIDAttr mail
+ #PerlSetVar AlternatePWAttribute alternateAttribute
  #PerlSetVar SearchScope base | one | sub # default is sub
  #PerlSetVar LDAPFilter "(&(course=CSA)(class=A))" #optional
 
@@ -222,6 +257,15 @@ This is the port the LDAP server is listening on.
 =item PerlSetVar UIDAttr
 
 The attribute used to lookup the user.
+
+=item PerlSetVar AlternatePWAttribute
+
+The an alternate attribute with which the $password will be tested.  
+This allows you to test with another attribute, instead of just
+trying to bind the userdn and password to the ldap server.
+
+If this option is used, then a BindDN and BindPWD must be used for the
+initial bind.
 
 =item PerlSetVar AllowAlternateAuth
 

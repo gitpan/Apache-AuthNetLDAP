@@ -39,3 +39,7 @@ Revision history for Perl extension Apache::AuthNetLDAP.
 
 0.28  Wed Mar 24 2004
 	- Split domain\username as seen coming from winxp (Based on code from Carlos Ramirez)
+
+0.29  Sat May 01 2004
+	- add ability to test $password against an alternate password attribute.
+  	  The alt attribute is signified by PerlSetVar PWAttr.
